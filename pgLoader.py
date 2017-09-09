@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 import os
 import xlwings as xw
 
-#Carga IIF, IRF  y RESB en access desde excel_file a postgre
+#Carga IIF, IRF  y RESB desde excel_file a postgre
 class dataManager(object):
     def __init__(self,ip='127.0.0.1',user='postgres',passw='jp123',db='Bolsa'):
         #super(, self).__init__()
