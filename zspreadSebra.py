@@ -158,19 +158,7 @@ def get_bond(issueDate,maturityDate,tir,bond_type = 'Zero',couponRate=None,payme
 
 #Gets Bond Zspread
 def get_zspread(npv,fixedRateBond,yieldcurve,z_spread=0):
-	#Setup Disc. curves.
-    #zSpreadQuoteHandle = ql.QuoteHandle(ql.SimpleQuote(z_spread))
-    #discountingTermStructure = ql.RelinkableYieldTermStructureHandle()
-    #discountingTermStructure.linkTo(yieldcurve)
-    #zSpreadedTermStructure = ql.ZeroSpreadedTermStructure(discountingTermStructure, zSpreadQuoteHandle)
-    #zSpreadRelinkableHandle = ql.RelinkableYieldTermStructureHandle()
-    #zSpreadRelinkableHandle.linkTo(zSpreadedTermStructure)
-    #bondEngine_with_added_zspread = ql.DiscountingBondEngine(zSpreadRelinkableHandle)
-    #fixedRateBond.setPricingEngine(bondEngine_with_added_zspread)
     z_spread = ql.CashFlows.zSpread(fixedRateBond.cashflows(),npv,yieldcurve,ql.Actual360(),ql.Compounded,ql.Semiannual,False)*100
-
-    #z_spread = ql.BondFunctions.zSpread(fixedRateBond, market_value,yieldcurve, ql.Actual360(), ql.Compounded, ql.Semiannual, today)*100
-
     return z_spread
 ## Builds 2y and 20y uf list to price bonds cashflows
 def uf_fwd(today,prices,dates,values ='UF'):
