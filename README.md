@@ -13,4 +13,4 @@ bondTools.py - Tools to use QuantLib with chilean fixed income products.
 
 qlChileCal.py - Contains a function that generates the Chilean calendar for QL.
 
-zspreadSebra.py - Example of an implementation of the first two scripts. 
+zspreadSebra.py - Example of an implementation of the other scripts. 
