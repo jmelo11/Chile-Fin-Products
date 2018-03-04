@@ -12,7 +12,7 @@ except:
 
 #Carga IIF, IRF  y RESB en access desde excel_file a postgre
 class dataManager(object):
-    def __init__(self,ip='127.0.0.1',port='5432',user='postgres',passw='jp123',db='Bolsa'):
+    def __init__(self,ip='127.0.0.1',port='5432',user=None',passw=None,db=None):
         super().__init__()
         self.connStr = 'postgresql://'+ user +':'+ passw + '@'+ip+':'+port+'/'+db
         self.engine = create_engine(self.connStr)
