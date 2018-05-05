@@ -2,15 +2,18 @@
 
 
 
-# Python tools for the chilean financial market.
+# Python scripts and objects for the chilean financial markets.
+
 Any contribution is welcome.
 
 # Files:
 
 pgLoader.py - It's a data managament script that lets you upload/download Pandas dataframes to/from a PostgreSQL database. 
 
-bondTools.py - Tools to use QuantLib with chilean fixed income products.
+CLBonds - Bond objects (Peso and UF).
 
-qlChileCal.py - Contains a function that generates the Chilean calendar for QL.
+CLCurves - Zero Curves and UF proyected values (From UF Forwards and UF/CAM swaps)
 
-zspreadSebra.py - Example of an implementation of the other scripts. 
+CLAUX - Chilean calendar for QuantLib and an objects that keeps the Observer patter alive.
+
+Other Files - Older examples of QuantLib usage in python.
