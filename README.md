@@ -2,7 +2,7 @@
 
 
 
-# Python scripts and objects for the chilean financial markets.
+# Python for the Chilean financial markets.
 
 Any contribution is welcome.
 
