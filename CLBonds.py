@@ -1,21 +1,17 @@
-"""
-Author: Jose Melo
-Basic bond functions from QL applied to CL fixed income.
-
-This file has two types of CL Bonds, the common Peso Bond (CLPBond class) and Inflation Indexed UFBond.
-The UFBond class observes the short term UF contracts and recalculates an auxiliary bond when prices change.
-This classes can be used to calculate Z-Spreads and other information.
-"""
 import QuantLib as ql
 from CLCurves import ICPCurve, ShortTermUFValues, LongTermUFValues
 from CLAux import *
 from pgLoader import dataManager
 
+"""
+Author: Jose Melo
+Basic bond functions from QL applied to CL fixed income.
 
+Two types of CL Bonds, the common Peso Bond (CLPBond class) and Inflation Indexed UFBond.
+The UFBond class observes the short term UF contracts and it recalculates an auxiliary bond
+that can be used to calculate Z-Spreads and others.
+"""
 class CLPBond(ql.FixedRateBond):
-    """
-        Works as the FixedRateBond from the library. It expects the same parameters.
-    """
     def __init__(self, settlement_days, notional, schedule, coupons, int_day_count):
         ql.FixedRateBond.__init__(self, settlement_days, notional, schedule, coupons, int_day_count)
         self.settlement_days = settlement_days
@@ -29,22 +25,15 @@ class CLPBond(ql.FixedRateBond):
             print(_.date(), _.amount())
     def dur(self, rate):
         return round(ql.BondFunctions.duration(self, rate, ql.Duration.Modified),2)
-
 class UFBond(CLPBond, PyObserver):
-    """
-        This kind of bond can be initialized as a common bond (it will considere its cashflows
-        as amount of UF to be paid) or if a ShortTermUFValues or LongTermUFValues object is also
-        passed in the UFValues variable, an auxiliary bond object can be calculated, which contains
-        CLP cashflows.
-    """
     def __init__(self, settlement_days, notional, schedule, coupons, int_day_count, UFValues = None):
         CLPBond.__init__(self, settlement_days, notional, schedule, coupons, int_day_count)
         PyObserver.__init__(self)
         self.UFValues = UFValues
-        self.fn = self.proyectedCLPBond
+        self.fn = self.proyectCLPBond
     def registerWithUFValues(self):
         self.registerWith(self.UFValues)
-    def proyectedCLPBond(self):
+    def proyectCLPBond(self):
         proyected_cashflows = []
         for _ in self.cashflows():
             if _.date() not in self.UFValues.uf_dict:
@@ -63,19 +52,36 @@ class UFBond(CLPBond, PyObserver):
                                     self.maturity_date,
                                     self.issue_date,
                                     leg)
-
     def showProyectedBondTable(self):
         print('Date','Amount')
         for _ in self.proyected_bond.cashflows():
             print(_.date(), round(_.amount()))
-
+class DPF(ql.ZeroCouponBond):
+    def __init__(self, settlement_days, calendar, fv, maturity_date, coupon_day_count):
+        self.settlement_days = settlement_days
+        self.calendar = calendar
+        self.fv = fv
+        self.maturity_date = maturity_date
+        self.coupon_day_count = coupon_day_count
+        ql.ZeroCouponBond.__init__(self, settlement_days, calendar, fv, maturity_date, coupon_day_count)
+class DPR(DPF, PyObserver):
+    def __init__(self, settlement_days, calendar, fv, maturity_date, coupon_day_count, UFValues = None):
+        DPF.__init__(self, settlement_days, calendar, fv, maturity_date, coupon_day_count)
+        PyObserver.__init__(self)
+        self.UFValues = UFValues
+        self.fn = self.proyectDPR
+    def registerWithUFValues(self):
+        self.registerWith(self.UFValues)
+    def proyectDPR(self):
+        proyected_uf = self.UFValues.uf_dict[self.maturity_date]
+        uf_fv = self.fv * proyected_uf
+        self.proyected_DPR = ql.ZeroCouponBond(self.settlement_days, self.calendar, uf_fv, self.maturity_date, self.coupon_day_count)
 def Curves(helper, date):
     #Define data
-    query_swap = 'select \"Mid\" from swap_clp where \"Date\"=\'' + qlToStr(date) + '\';'
+    query_swap = 'select \"Zero\" from swap_clp where \"Date\"=\'' + qlToStr(date) + '\';'
     swap = helper.get_raw_data(query_swap)
     swap = [ql.SimpleQuote(x/100) for x in swap]
-
-    clp_curve = ICPCurve(date, swap, 'CLP', 'Swap')
+    clp_curve = ICPCurve(date, swap, 'CLP', 'Zero')
 
     #Define data
     query_swap = 'select \"Mid\" from swap_uf where \"Date\"=\'' + qlToStr(date) + '\';'
@@ -95,8 +101,7 @@ def ShortUF(helper, date):
     return ShortTermUFValues(dates, prices)
 def LongUF(date, clp_curve, uf_curve, short_uf):
     return LongTermUFValues(date, clp_curve, uf_curve, short_uf)
-def defineBond(UFValues, currency, issue_date, maturity_date, notional, coupon_rate):
-    tenor = ql.Period(ql.Semiannual)
+def defineBond(UFValues, currency, issue_date, maturity_date, notional, coupon_rate, tenor = ql.Period(ql.Semiannual)):
     calendar = ql.NullCalendar()
     coupon_day_count = ql.Unadjusted
     payment_convention = ql.Following
@@ -126,78 +131,35 @@ def defineBond(UFValues, currency, issue_date, maturity_date, notional, coupon_r
                         coupon_rate,
                         interest_day_count,
                         UFValues)
-        bond.proyectedCLPBond()
+        bond.proyectCLPBond()
     return bond
-def qlToStr(date):
-    date = str(date.dayOfMonth()) + '/' + str(date.month()) + '/' + str(date.year())
-    return date
-def dtToQl(date):
-    date = pd.to_datetime(str(date))
-    date_ql = ql.DateParser.parseFormatted(date.strftime("%d-%m-%y"),'%d-%m-%y')
-    return date_ql
 def getZSpread(bond, npv, clp_curve):
-    spread = ql.CashFlows.zSpread(bond.cashflows(),npv, clp_curve,ql.Actual360(),ql.Compounded,ql.Semiannual,True)*100
+    spread = ql.CashFlows.zSpread(bond.cashflows(), npv, clp_curve, ql.Actual360(), ql.Simple, ql.Annual, True)*100
     return round(spread,2)
 
 """
-main() contains examples and test cases for debugging.
+example() contains examples and test cases for debugging.
 """
-def exampleBond(UFValues):
-    issueDate = ql.Date(1,6,2015)
-    maturityDate = ql.Date(1,6,2020)
-    tenor = ql.Period(ql.Semiannual)
-    calendar = ql.NullCalendar()
-    coupon_dayCount = ql.Unadjusted
-    payment_convention = ql.Following
-    dateGeneration = ql.DateGeneration.Forward
-    monthEnd = False
-    settlementDays = 0
-    interest_dayCount = ql.Thirty360()
+def example():
+    db_market = dataManager(db='Bolsa')
+    ql_date = ql.Date(26,6,2018)
+    ql.Settings.instance().evaluationDate = ql_date
+    calendar = CalendarCl(2001,50)
+
+    #Curvas
+    clp_curve, uf_curve = Curves(db_market, ql_date)
+    short_uf = ShortUF(db_market, ql_date)
+    long_uf = LongUF(ql_date, clp_curve, uf_curve, short_uf)
+    issue_date = ql.Date(1,9,2015)
+    maturity_date = ql.Date(1,3,2021)
+    coupon_rate = [1.5/100]
+    tir = 0.87/100
     notional = 100
-    bond_type ='Bullet'
-    currency = 'CLP'
-    coupons = [4.5/100]
-    tir = 3.22/100
-
-    schedule = ql.Schedule (issueDate,
-                            maturityDate,
-                            tenor,
-                            calendar,
-                            coupon_dayCount,
-                            payment_convention,
-                            dateGeneration,
-                            monthEnd)
-
-    bond = UFBond(settlementDays,
-                    notional,
-                    schedule,
-                    coupons,
-                    interest_dayCount,
-                    UFValues)
-
-    rate = ql.InterestRate(tir,
-                            ql.Actual365Fixed(),
-                            ql.Compounded,
-                            ql.Annual)
-
-    print(bond.dur(rate))
-    return bond
-def main():
-    helper = dataManager(ip='192.168.0.3', port='8080')
-    date = ql.Date(1,3,2018)
-    ql.Settings.instance().evaluationDate = date
-
-    clp_curve, uf_curve = Swap(helper, date)
-    short_ufs = ShortUf(helper)
-    long_ufs = LongUf(helper, date, clp_curve, uf_curve, short_ufs)
-    bond = exampleBond(long_ufs)
-
-    bond.registerWithUFValues()
-    bond.proyectedCLPBond()
-    #Test of UF quotes updated
-    bond.showProyectedBondTable()
-    short_ufs.prices[1].setValue(1000)
-    #long_ufs.showUfs()
-    bond.showProyectedBondTable()
+    bond = defineBond(long_uf, 'UF', issue_date, maturity_date, notional, coupon_rate)
+    bond.showTable()
+    rate = ql.InterestRate(tir, ql.Actual365Fixed(), ql.Simple, ql.Annual)
+    npv = ql.CashFlows.npv(bond.cashflows(), rate, True) * long_uf.uf_dict[ql_date]
+    z_spread = getZSpread(bond.proyected_bond, npv, clp_curve)
+    print('NPV',npv,'ZSPread',z_spread)
 if __name__ == '__main__':
-    main()
+    example()
